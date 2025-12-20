@@ -1,0 +1,14 @@
+{
+  "serial_port": "COM3",
+  "baud_rate": 9600,
+  "camera_index": 0,
+  "detection_threshold": 0.3,
+  "close_range_face_size": 100,
+  "frame_width": 640,
+  "frame_height": 480,
+  "fps": 30,
+  "dashboard_url": "http://localhost:3001",
+  "websocket_url": "ws://localhost:3001",
+  "show_preview": false
+}
+
