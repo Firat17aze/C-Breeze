@@ -31,7 +31,8 @@ const CONFIG = {
 
 // State management
 let systemState = {
-    distance: 0,
+    distance: 0,       // Distance in cm (calculated from timeUs)
+    timeUs: 0,         // Time in microseconds (raw sensor data)
     fanStatus: 'OFF',
     humanDetected: false,
     mode: 'AUTO',
@@ -89,12 +90,18 @@ function initSerialPort() {
  * Parse messages from Arduino
  */
 function parseArduinoMessage(message) {
-    if (message.startsWith('DIST:')) {
-        const distance = parseInt(message.substring(5));
-        if (!isNaN(distance) && distance > 0) {
-            // Only update if distance is valid (> 0)
-            // Ignore 0 readings which are sensor errors
-            systemState.distance = distance;
+    if (message.startsWith('TIME:')) {
+        const timeUs = parseInt(message.substring(5));
+        if (!isNaN(timeUs) && timeUs > 0) {
+            // Store time in microseconds
+            systemState.timeUs = timeUs;
+            // IMPROVED DISTANCE CALCULATION for accuracy
+            // Sound speed = 343 m/s = 0.0343 cm/µs
+            // Sensor measures ROUND TRIP time
+            // Actual distance = (round_trip_time * speed) / 2
+            // distance_cm = (time_µs * 0.0343) / 2 = time_µs * 0.01715
+            // Using precise calculation: distance_cm = (time_µs * 1715) / 100000
+            systemState.distance = Math.round((timeUs * 1715) / 100000);
             systemState.timestamp = Date.now();
             broadcastState();
         }
@@ -190,11 +197,13 @@ app.post('/api/fan', (req, res) => {
     }
     
     if (action === 'ON') {
-        sendToArduino('F1');
+        sendToArduino('F');
+        setTimeout(() => sendToArduino('1'), 50);
         systemState.fanStatus = 'ON';
         console.log('Manual control: Fan turned ON');
     } else if (action === 'OFF') {
-        sendToArduino('F0');
+        sendToArduino('F');
+        setTimeout(() => sendToArduino('0'), 50);
         systemState.fanStatus = 'OFF';
         console.log('Manual control: Fan turned OFF');
     } else {
@@ -220,29 +229,19 @@ app.post('/api/vision-update', (req, res) => {
     if (humanDetected !== undefined) {
         systemState.humanDetected = humanDetected;
         
-        // In AUTO mode, control fan based on BOTH detection AND distance
+        // Only send camera signals in AUTO mode, ignore vision updates in MANUAL mode
         if (systemState.mode === 'AUTO') {
-            // Only make decisions when we have valid distance reading
-            if (systemState.distance > 0) {
-                // Fan ON only if: human detected AND distance <= threshold
-                const shouldTurnOn = humanDetected && 
-                                   systemState.distance <= CONFIG.distanceThreshold;
-                
-                if (shouldTurnOn && systemState.fanStatus !== 'ON') {
-                    sendToArduino('F1');
-                    systemState.fanStatus = 'ON';
-                    console.log(`AUTO: Fan ON - Human: ${humanDetected}, Distance: ${systemState.distance}cm`);
-                } else if (!shouldTurnOn && systemState.fanStatus !== 'OFF') {
-                    sendToArduino('F0');
-                    systemState.fanStatus = 'OFF';
-                    if (humanDetected && systemState.distance > CONFIG.distanceThreshold) {
-                        console.log(`AUTO: Fan OFF - Human detected but too far: ${systemState.distance}cm`);
-                    } else {
-                        console.log(`AUTO: Fan OFF - No human detected`);
-                    }
-                }
+            // Send camera activation signal to Arduino (1 = human detected, 0 = no human)
+            // Arduino will handle the distance check and fan control logic
+            if (humanDetected) {
+                sendToArduino('1');  // Camera detected human
+                console.log(`AUTO: Camera signal - Human detected`);
+            } else {
+                sendToArduino('0');  // No human detected
+                console.log(`AUTO: Camera signal - No human`);
             }
-            // If distance is 0 (sensor error), keep current fan state
+        } else {
+            console.log(`MANUAL: Vision update ignored in manual mode`);
         }
     }
     
@@ -298,10 +297,12 @@ io.on('connection', (socket) => {
         
         if (systemState.mode === 'MANUAL') {
             if (action === 'ON') {
-                sendToArduino('F1');
+                sendToArduino('F');
+                setTimeout(() => sendToArduino('1'), 50);
                 systemState.fanStatus = 'ON';
             } else if (action === 'OFF') {
-                sendToArduino('F0');
+                sendToArduino('F');
+                setTimeout(() => sendToArduino('0'), 50);
                 systemState.fanStatus = 'OFF';
             }
             
