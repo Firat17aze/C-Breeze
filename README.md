@@ -8,7 +8,7 @@ A complete smart fan control system that combines computer vision (laptop camera
 ┌─────────────────┐         ┌──────────────┐         ┌─────────────┐
 │  Python Vision  │────────▶│   Arduino    │◀────────│   Node.js   │
 │     Module      │  Serial │     Uno      │  Serial │   Backend   │
-│   (OpenCV)      │         │  (Bare C)    │         │  (Express)  │
+│   (OpenCV)      │         │       (C)    │         │  (Express)  │
 └─────────────────┘         └──────────────┘         └──────┬──────┘
                                                              │
                                                              │ WebSocket
@@ -171,7 +171,7 @@ Then open `http://localhost:8000` in your browser.
 
 ### Starting the System
 
-1. **Upload Arduino Code**: Compile and upload the bare metal C code to Arduino
+1. **Upload Arduino Code**: Compile and upload the C code to Arduino
 2. **Start Backend Server**: Run `npm start` in the `backend` directory
 3. **Start Frontend**: Serve `frontend/index.html` using a web server (e.g., `python -m http.server 8000` in the frontend directory)
 4. **Start Face Tracking**: Run `python app.py`
