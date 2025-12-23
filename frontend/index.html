@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="IoT Smart Fan Control System Dashboard">
+    <title>Smart Fan Control Dashboard</title>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .App {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .dashboard-container {
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .dashboard-header h1 {
+            font-size: 2rem;
+            color: #333;
+            font-weight: 700;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .connection-status.connected .status-dot {
+            background-color: #4caf50;
+        }
+
+        .connection-status.disconnected .status-dot {
+            background-color: #f44336;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .card h2 {
+            font-size: 1.3rem;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        /* Fan Status Card */
+        .fan-indicator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .fan-icon {
+            font-size: 4rem;
+            animation: spin 3s linear infinite;
+        }
+
+        .fan-indicator.on .fan-icon {
+            animation: spin 0.5s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .fan-status-text {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .fan-indicator.on .fan-status-text {
+            color: #4caf50;
+        }
+
+        .fan-indicator.off .fan-status-text {
+            color: #999;
+        }
+
+        /* Distance Card */
+        .distance-value {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .unit {
+            font-size: 1.5rem;
+            color: #999;
+            margin-left: 5px;
+        }
+
+        .distance-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .distance-fill {
+            height: 100%;
+            transition: width 0.3s ease, background-color 0.3s ease;
+            border-radius: 10px;
+        }
+
+        /* Detection Card */
+        .detection-status {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .detection-icon {
+            font-size: 4rem;
+        }
+
+        .detection-text {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .detection-status.detected .detection-text {
+            color: #4caf50;
+        }
+
+        .detection-status.not-detected .detection-text {
+            color: #999;
+        }
+
+        /* Mode Card */
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .mode-button {
+            flex: 1;
+            padding: 12px 20px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .mode-button:hover {
+            background: #f0f0f0;
+        }
+
+        .mode-button.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .mode-description {
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        /* Manual Control Card */
+        .manual-control-card {
+            display: none;
+        }
+
+        .manual-control-card.visible {
+            display: block;
+        }
+
+        .manual-buttons {
+            display: flex;
+            gap: 15px;
+        }
+
+        .control-button {
+            flex: 1;
+            padding: 15px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .control-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .control-button.active {
+            background: #4caf50;
+            color: white;
+        }
+
+        .control-button.turn-on.active {
+            background: #4caf50;
+        }
+
+        .control-button.turn-off.active {
+            background: #f44336;
+        }
+
+        /* Info Card */
+        .info-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .info-item:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #666;
+        }
+
+        .info-value {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .info-value.online {
+            color: #4caf50;
+        }
+
+        .info-value.offline {
+            color: #f44336;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .dashboard-header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+
+            .dashboard-header h1 {
+                font-size: 1.5rem;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .distance-value {
+                font-size: 2.5rem;
+            }
+
+            .fan-icon,
+            .detection-icon {
+                font-size: 3rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="App">
+        <div class="dashboard-container">
+            <header class="dashboard-header">
+                <h1>🌪️ Smart Fan Control System</h1>
+                <div class="connection-status disconnected" id="connectionStatus">
+                    <span class="status-dot"></span>
+                    <span id="connectionText">Disconnected</span>
+                </div>
+            </header>
+
+            <div class="dashboard-grid">
+                <!-- Fan Status Card -->
+                <div class="card fan-status-card">
+                    <h2>Fan Status</h2>
+                    <div class="fan-indicator off" id="fanIndicator">
+                        <div class="fan-icon">💨</div>
+                        <div class="fan-status-text" id="fanStatusText">OFF</div>
+                    </div>
+                </div>
+
+                <!-- Distance Card -->
+                <div class="card distance-card">
+                    <h2>Distance</h2>
+                    <div class="distance-value">
+                        <span id="distanceValue">0</span>
+                        <span class="unit">cm</span>
+                    </div>
+                    <div class="distance-bar">
+                        <div class="distance-fill" id="distanceFill"></div>
+                    </div>
+                </div>
+
+                <!-- Detection Status Card -->
+                <div class="card detection-card">
+                    <h2>Human Detection</h2>
+                    <div class="detection-status not-detected" id="detectionStatus">
+                        <div class="detection-icon">🚫</div>
+                        <div class="detection-text" id="detectionText">Not Detected</div>
+                    </div>
+                </div>
+
+                <!-- Mode Card -->
+                <div class="card mode-card">
+                    <h2>Operating Mode</h2>
+                    <div class="mode-selector">
+                        <button class="mode-button active" id="autoModeBtn" onclick="handleModeChange('AUTO')">
+                            AUTO
+                        </button>
+                        <button class="mode-button" id="manualModeBtn" onclick="handleModeChange('MANUAL')">
+                            MANUAL
+                        </button>
+                    </div>
+                    <p class="mode-description" id="modeDescription">
+                        System automatically controls fan based on sensor and camera detection
+                    </p>
+                </div>
+
+                <!-- Manual Control Card -->
+                <div class="card manual-control-card" id="manualControlCard">
+                    <h2>Manual Control</h2>
+                    <div class="manual-buttons">
+                        <button class="control-button turn-on" id="fanOnBtn" onclick="handleFanControl('ON')">
+                            Turn ON
+                        </button>
+                        <button class="control-button turn-off active" id="fanOffBtn" onclick="handleFanControl('OFF')">
+                            Turn OFF
+                        </button>
+                    </div>
+                </div>
+
+                <!-- System Info Card -->
+                <div class="card info-card">
+                    <h2>System Information</h2>
+                    <div class="info-list">
+                        <div class="info-item">
+                            <span class="info-label">Last Update:</span>
+                            <span class="info-value" id="lastUpdate">--:--:--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Threshold:</span>
+                            <span class="info-value">50 cm</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Status:</span>
+                            <span class="info-value offline" id="systemStatus">Offline</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_URL = 'http://localhost:3001';
+        const SOCKET_URL = 'http://localhost:3001';
+
+        // State
+        let state = {
+            distance: 0,
+            fanStatus: 'OFF',
+            humanDetected: false,
+            mode: 'AUTO',
+            timestamp: Date.now()
+        };
+
+        let socket = null;
+        let connected = false;
+
+        // Initialize Socket.io connection
+        function initSocket() {
+            socket = io(SOCKET_URL);
+
+            socket.on('connect', () => {
+                console.log('Connected to server');
+                connected = true;
+                updateConnectionStatus(true);
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected from server');
+                connected = false;
+                updateConnectionStatus(false);
+            });
+
+            socket.on('stateUpdate', (data) => {
+                updateState(data);
+            });
+        }
+
+        // Update connection status UI
+        function updateConnectionStatus(isConnected) {
+            const statusEl = document.getElementById('connectionStatus');
+            const textEl = document.getElementById('connectionText');
+            const systemStatusEl = document.getElementById('systemStatus');
+
+            if (isConnected) {
+                statusEl.classList.remove('disconnected');
+                statusEl.classList.add('connected');
+                textEl.textContent = 'Connected';
+                systemStatusEl.textContent = 'Online';
+                systemStatusEl.classList.remove('offline');
+                systemStatusEl.classList.add('online');
+            } else {
+                statusEl.classList.remove('connected');
+                statusEl.classList.add('disconnected');
+                textEl.textContent = 'Disconnected';
+                systemStatusEl.textContent = 'Offline';
+                systemStatusEl.classList.remove('online');
+                systemStatusEl.classList.add('offline');
+            }
+        }
+
+        // Update state and UI
+        function updateState(newState) {
+            state = { ...state, ...newState };
+            
+            // Update fan status
+            const fanIndicator = document.getElementById('fanIndicator');
+            const fanStatusText = document.getElementById('fanStatusText');
+            const fanIcon = fanIndicator.querySelector('.fan-icon');
+            
+            if (state.fanStatus === 'ON') {
+                fanIndicator.classList.remove('off');
+                fanIndicator.classList.add('on');
+                fanStatusText.textContent = 'ON';
+                fanIcon.textContent = '🌀';
+            } else {
+                fanIndicator.classList.remove('on');
+                fanIndicator.classList.add('off');
+                fanStatusText.textContent = 'OFF';
+                fanIcon.textContent = '💨';
+            }
+
+            // Update distance
+            const distanceValue = document.getElementById('distanceValue');
+            const distanceFill = document.getElementById('distanceFill');
+            distanceValue.textContent = state.distance;
+            
+            const fillPercent = Math.min((state.distance / 200) * 100, 100);
+            distanceFill.style.width = fillPercent + '%';
+            distanceFill.style.backgroundColor = state.distance <= 50 ? '#4caf50' : '#ff9800';
+
+            // Update detection status
+            const detectionStatus = document.getElementById('detectionStatus');
+            const detectionText = document.getElementById('detectionText');
+            const detectionIcon = detectionStatus.querySelector('.detection-icon');
+            
+            if (state.humanDetected) {
+                detectionStatus.classList.remove('not-detected');
+                detectionStatus.classList.add('detected');
+                detectionText.textContent = 'Detected';
+                detectionIcon.textContent = '👤';
+            } else {
+                detectionStatus.classList.remove('detected');
+                detectionStatus.classList.add('not-detected');
+                detectionText.textContent = 'Not Detected';
+                detectionIcon.textContent = '🚫';
+            }
+
+            // Update mode
+            const autoModeBtn = document.getElementById('autoModeBtn');
+            const manualModeBtn = document.getElementById('manualModeBtn');
+            const modeDescription = document.getElementById('modeDescription');
+            const manualControlCard = document.getElementById('manualControlCard');
+
+            if (state.mode === 'AUTO') {
+                autoModeBtn.classList.add('active');
+                manualModeBtn.classList.remove('active');
+                modeDescription.textContent = 'System automatically controls fan based on sensor and camera detection';
+                manualControlCard.classList.remove('visible');
+            } else {
+                manualModeBtn.classList.add('active');
+                autoModeBtn.classList.remove('active');
+                modeDescription.textContent = 'Manual control enabled. Use buttons below to control fan.';
+                manualControlCard.classList.add('visible');
+            }
+
+            // Update manual control buttons
+            const fanOnBtn = document.getElementById('fanOnBtn');
+            const fanOffBtn = document.getElementById('fanOffBtn');
+            
+            if (state.fanStatus === 'ON') {
+                fanOnBtn.classList.add('active');
+                fanOffBtn.classList.remove('active');
+            } else {
+                fanOffBtn.classList.add('active');
+                fanOnBtn.classList.remove('active');
+            }
+
+            // Update last update time
+            const lastUpdate = document.getElementById('lastUpdate');
+            lastUpdate.textContent = new Date(state.timestamp).toLocaleTimeString();
+        }
+
+        // Handle mode change
+        async function handleModeChange(newMode) {
+            try {
+                const response = await fetch(`${API_URL}/api/mode`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ mode: newMode }),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    state.mode = newMode;
+                    updateState(state);
+                }
+            } catch (error) {
+                console.error('Error changing mode:', error);
+            }
+        }
+
+        // Handle fan control
+        async function handleFanControl(action) {
+            if (state.mode !== 'MANUAL') {
+                alert('Please switch to MANUAL mode to control the fan');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/api/fan`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ action }),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    state.fanStatus = action;
+                    updateState(state);
+                }
+            } catch (error) {
+                console.error('Error controlling fan:', error);
+            }
+        }
+
+        // Fetch initial state
+        async function fetchInitialState() {
+            try {
+                const response = await fetch(`${API_URL}/api/status`);
+                const data = await response.json();
+                updateState(data);
+            } catch (error) {
+                console.error('Error fetching initial state:', error);
+            }
+        }
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            initSocket();
+            fetchInitialState();
+        });
+    </script>
+</body>
+</html>
+
